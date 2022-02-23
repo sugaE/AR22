@@ -53,4 +53,5 @@ CATKIN_IGNORE
 # macos
 .DS_Store
 rvctools/
+*.asv
 
