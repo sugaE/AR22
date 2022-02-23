@@ -52,7 +52,7 @@ for i = 1:n
     Tn = cat(3, Tn , T); % save intermediate for J
 end
 
-%% J Jacobian calculations89
+%% J Jacobian calculations
 for i = 1:n
     Z_i = Tn(1:3,3,i);
     if jtype(i) == 1  % prismatic
@@ -63,7 +63,7 @@ for i = 1:n
     else             % revolute
         %%%% complete here %%%%
         J(:,i) = [
-            cross(Z_i, T(1:3,4)-Tn(1:3,4,i)); % linear velocity
+            cross(Z_i, T(1:3,4) - Tn(1:3,4,i)); % linear velocity
             Z_i]; % angular velocity
     end
 end
