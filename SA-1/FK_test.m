@@ -13,7 +13,7 @@ clear all;close all;clc;
 %
 % with alpha_i and theta_i in radiant
 %% EXAMPLE: planar robot
-q = [pi/2;pi/4;pi/2];
+q = [pi/2; pi/4; pi/2];
 
 DH(:,1) = [0.5 1 0.5]';             % a  
 DH(:,2) = [pi/2 0 0]';           % alpha
@@ -26,7 +26,7 @@ jtype = zeros(3,1);
 [T1, J1] = FK(DH, jtype, q)
 % Plot robot 
 figure()
-sim_robot(DH,q,jtype)
+sim_robot(DH, q, jtype)
 
 %% Other examples. Using typical manipulator structures from Robotics book 3.2
 % set up here the code to test your FK function with other robot's
@@ -34,7 +34,7 @@ sim_robot(DH,q,jtype)
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% BOOK 3.2.1 three-link planar arm
-q2 = [pi/3;pi/2;-pi/4];
+q2 = [pi/2; pi/3; -pi/6];
 
 DH2(:,1) = [1 2 0.5]';             % a  
 DH2(:,2) = [0 0 0]';           % alpha
@@ -46,20 +46,19 @@ jtype2 = zeros(3,1);
 [T2, J2] = FK(DH2, jtype2, q2)
 % Plot robot 
 figure()
-sim_robot(DH2,q2,jtype2)
+sim_robot(DH2, q2, jtype2)
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% BOOK 3.2.3 Stanford Manipulator
-q3 = [pi/2;pi/2;0;-pi/4;pi/3;-pi/6];
+q3 = [pi/2; pi/6; 10; -pi/4; pi/3; pi/2];
 
-DH3(:,1) = [1.5,2,1,0.5,0.5,0.5]';             % a  
-DH3(:,2) = [pi/2, -pi/2, 0, pi/2, -pi/2, pi/2]';           % alpha
-DH3(:,3) = [0 0 2 0 0 0]';               % d
-DH3(:,4) = q3;      % theta
+DH3(:,1) = [0, 0, 0, 0, 2, 1]';             % a  
+DH3(:,2) = [pi/2, -pi/2, 0, pi/2, pi/2, 0]';           % alpha
+DH3(:,3) = [2 5 0 4 2 2]';               % d
+DH3(:,4) = [0; 0; 0; 0; 0; 0];      % theta
 
-jtype3 = [0 0 1 0 0 0]';
-
+jtype3 = [0 0 1 0 0 0]'; 
 [T3, J3] = FK(DH3, jtype3, q3)
 % Plot robot 
 figure()
-sim_robot(DH3,q3,jtype3)
+sim_robot(DH3, q3, jtype3)

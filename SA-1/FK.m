@@ -20,50 +20,46 @@ T = eye(4,4);
 J = zeros(6,n);
 Tn = [T];
 %% T homogeneous matrix calculations
-for i = 1:n
+for i = 1:n 
+    if jtype(i) == 1    % prismatic
+        %%%% complete here %%%%
+        theta = DH_params(i, 4);  
+        d = q(i) + DH_params(i, 3); 
+    else                % revolute
+        %%%% complete here %%%%
+        theta = q(i) + DH_params(i, 4);
+        d = DH_params(i, 3);
+    end
+    %%%% complete here %%%% 
     a = DH_params(i, 1);
-    alph = DH_params(i, 2);
+    alph = DH_params(i, 2); % alpha
     c_alpha = cos(alph);
     s_alpha = sin(alph);
-
-    if jtype(i) == 1  % prismatic
-        %%%% complete here %%%%
-        d = DH_params(i, 3);
-        A_i = [
-            1, 0, 0, a;
-            0, c_alpha, -s_alpha, 0;
-            0, s_alpha, c_alpha, d;
-            0, 0, 0, 1];
-    else            % revolute
-        %%%% complete here %%%%
-        theta = DH_params(i, 4);
-        c_theta = cos(theta);
-        s_theta = sin(theta);
-        A_i = [
-            c_theta, -s_theta*c_alpha, s_theta*s_alpha, a*c_theta;
-            s_theta, c_theta*c_alpha, -c_theta*s_alpha, a*s_theta;
-            0, s_alpha, c_alpha, 0;
-            0, 0, 0, 1];
-    end
-    %%%% complete here %%%%
+    c_theta = cos(theta);
+    s_theta = sin(theta); 
     % computing Homogeneous matrix
-    T = T * A_i;
+    A_i = [                 % Equation. 1
+        c_theta, -s_theta*c_alpha, s_theta*s_alpha, a*c_theta;
+        s_theta, c_theta*c_alpha, -c_theta*s_alpha, a*s_theta;
+        0, s_alpha, c_alpha, d;
+        0, 0, 0, 1];
     %%%% complete here %%%%
-    Tn = cat(3, Tn , T); % save intermediate for J
+    T = T * A_i;            % Equation. 2
+    Tn = cat(3, Tn , T);    % save intermediate for J
 end
 
 %% J Jacobian calculations
 for i = 1:n
-    Z_i = Tn(1:3,3,i);
-    if jtype(i) == 1  % prismatic
+    Z_i = Tn(1:3, 3, i);
+    if jtype(i) == 1    % prismatic
         %%%% complete here %%%%
-        J(:,i) = [
-            Z_i; % linear velocity
-            0; 0; 0]; % angular velocity
-    else             % revolute
+        J(:,i) = [      % Equation. 3
+            Z_i;        % linear 
+            0; 0; 0];   % angular 
+    else                % revolute
         %%%% complete here %%%%
-        J(:,i) = [
-            cross(Z_i, T(1:3,4) - Tn(1:3,4,i)); % linear velocity
-            Z_i]; % angular velocity
+        J(:,i) = [      % Equation. 3
+            cross(Z_i, T(1:3, 4) - Tn(1:3, 4, i)); % linear 
+            Z_i];       % angular 
     end
 end
