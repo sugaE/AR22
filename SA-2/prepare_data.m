@@ -27,7 +27,9 @@ else
 end
 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 [Q, E] = IK(DH, jtype, q, p_des, o_e); 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 fig1=figure();
 plot(transpose(Q));

@@ -27,6 +27,7 @@ q_des = rand(3,1);              % desired joint configuration
 [Q1, E1] = prepare_data(DH, jtype, q, q_des, 2, "1");
 
 % Check the final error between the current end-effector pose and the desired one
+Final_q = Q1(:, end)
 Final_errors = E1(:, end)
 
 % Simulate the robot at each step of the iterative inverse kinematics 
@@ -46,14 +47,15 @@ DH2(:,2) = rand(3,1);           % alpha
 DH2(:,3) = zeros(3,1);           % d
 DH2(:,4) = q2;                    % theta
 q_des2 = rand(3,1);              % desired joint configuration
- %%
-close all;clc;
+
+% close all;clc;
 [Q2, E2] = prepare_data(DH2, jtype2, q2, q_des2, 3, "2");
 
 % Check the final error between the current end-effector pose and the desired one
+Final_q = Q2(:, end)
 Final_errors = E2(:, end) 
 
-figure("Name","EXAMPLE 2: 3d Arm");
-for steps = 1:size(Q2,2)
-    sim_robot(DH2,Q2(:,steps),jtype2);
-end
+% figure("Name","EXAMPLE 2: 3d Arm");
+% for steps = 1:size(Q2,2)
+%     sim_robot(DH2,Q2(:,steps),jtype2);
+% end

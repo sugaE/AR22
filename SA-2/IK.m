@@ -49,7 +49,7 @@ else
     K = eye(dim+3);
 end
 % converging rate
-K = K * 0.02;
+K = K * 0.05; %2d
 
 % q after each iteration
 Q = [q];
@@ -59,8 +59,8 @@ E = [];
 while ind <= max_ind  
     q1 = Q(:,end);
     [T, J] = FK(DH_params, jtype, q1);
-    p_e = T(1:dim, 4);
-    R_e = T(1:3, 1:3);
+    p_e = T(1:dim, 4); % position
+    R_e = T(1:3, 1:3); % rotation matrix
     
     phi_e = atan2(R_e(2,1), R_e(1,1));
     theta_e=0;
@@ -92,19 +92,6 @@ while ind <= max_ind
             0,-sin(phi_e), cos(phi_e)*cos(theta_e);
             0, cos(phi_e), sin(phi_e)*cos(theta_e);
             1,0,-sin(theta_e)];
-    
-%         Ta = [
-%             cos(phi_e), -sin(phi_e), 0;
-%             sin(phi_e), cos(phi_e), 0;
-%             0,0,1] * [
-%             cos(theta_e),0, sin(theta_e);
-%             0,1,0,
-%             -sin(theta_e),0, cos(theta_e);
-%             ] * [
-%             1,0,0,
-%             0,cos(psi_e),-sin(psi_e);
-%             0,sin(psi_e), cos(psi_e);
-%             ];
 
         T_phi(end-2:end,end-2:end)=Ta;
 %         Analysis Jaccobian. 
