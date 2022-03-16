@@ -55,4 +55,8 @@ CATKIN_IGNORE
 rvctools/
 *.asv
 *.mlx
+*/images/*
+
+!*.gitkeep
+
 
