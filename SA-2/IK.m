@@ -1,4 +1,4 @@
-function Q = IK(DH_params, jtype, q, pdes, odes)
+function [Q, E] = IK(DH_params, jtype, q, pdes, odes)
 % IK calculates the inverse kinematics of a manipulator
 % Q = IK(DH_params, jtype, q, pdes, odes) calculates the joint
 % values of a manipulator robot given the desired end-effector's position
@@ -39,85 +39,91 @@ end
 %% iterative inverse kinematics
 %%% Complete here %%% 
 ind = 1;
-max_ind = 500 ;
-err_thred = 0.05
+% end term: max iterations
+max_ind = 1500;
+% end term: error threshod
+err_thred = 0.05;
 if dim==2
-    K = eye(dim+1) ;
+    K = eye(dim+1);
 else
     K = eye(dim+3);
 end
-K = K * 0.05 ;
-Q=[q] 
+% converging rate
+K = K * 0.02;
 
+% q after each iteration
+Q = [q];
+% error after each iteration
+E = [];
 
 while ind <= max_ind  
     q1 = Q(:,end);
     [T, J] = FK(DH_params, jtype, q1);
-    p_e = T(1:dim, 4)  % todo use dim
-    R_e = T(1:3, 1:3) ;% todo use dim
+    p_e = T(1:dim, 4);
+    R_e = T(1:3, 1:3);
     
-    phi_e = atan2(R_e(2,1), R_e(1,1)) 
+    phi_e = atan2(R_e(2,1), R_e(1,1));
     theta_e=0;
     psi_e=0;
     o_e = phi_e;
     if dim ~= 2
-        theta_e = atan2(-R_e(3,1), sqrt(R_e(3,2)^2+R_e(3,3)^2)) ;
-        psi_e = atan2(R_e(3,2), R_e(3,3)) ;
+        theta_e = atan2(-R_e(3,1), sqrt(R_e(3,2)^2+R_e(3,3)^2));
+        psi_e = atan2(R_e(3,2), R_e(3,3));
         o_e = [theta_e;psi_e;phi_e];
-    end 
+    end
 
     err_pos = pdes - p_e;
     err_ori = odes - o_e;
 
-    err = [err_pos; err_ori]
-    if norm(err) < err_thred % & abs(err_ori) < 0.1
+    errs = [err_pos; err_ori];
+    E = cat(2, E, errs);
+    if norm(err_pos) < err_thred & norm(err_ori) < err_thred
+        fprintf(num2str(ind)+" iters in total.\n");
         return;
     end
-
-    T_phi = eye(6) ; %  todo singularity
-%     Ta = [
-%         0,-sin(phi_e), cos(phi_e)*cos(theta_e);
-%         0, cos(phi_e), sin(phi_e)*cos(theta_e);
-%         1,0,-sin(theta_e)];
-
-    Ta = [
-        cos(phi_e), -sin(phi_e), 0;
-        sin(phi_e), cos(phi_e), 0;
-        0,0,1] * [
-        cos(theta_e),0, sin(theta_e);
-        0,1,0,
-        -sin(theta_e),0, cos(theta_e);
-        ] * [
-        1,0,0,
-        0,cos(psi_e),-sin(psi_e);
-        0,sin(psi_e), cos(psi_e);
-        ];
-
+ 
     if dim==2
         J = cat(1,J(1:2,:),J(end,:));
-        Ja = J;
-%         T_phi = eye(3) ; %  todo singularity
-%         T_phi(end-1:end,end-1:end)=Ta(end-1:end,1:2);
+        Ja = J; 
     else
-        T_phi = eye(6) ; %  todo singularity
-        T_phi(end-2:end,end-2:end)=Ta;
-        Ja  = T_phi * J
-    end 
-%     Ja=J
+        T_phi = eye(6);
+
+        Ta = [
+            0,-sin(phi_e), cos(phi_e)*cos(theta_e);
+            0, cos(phi_e), sin(phi_e)*cos(theta_e);
+            1,0,-sin(theta_e)];
     
-    % qdot = J^+ v_e { + I - J^+ J } q0dot
-    qdot = Ja' * K * err;
+%         Ta = [
+%             cos(phi_e), -sin(phi_e), 0;
+%             sin(phi_e), cos(phi_e), 0;
+%             0,0,1] * [
+%             cos(theta_e),0, sin(theta_e);
+%             0,1,0,
+%             -sin(theta_e),0, cos(theta_e);
+%             ] * [
+%             1,0,0,
+%             0,cos(psi_e),-sin(psi_e);
+%             0,sin(psi_e), cos(psi_e);
+%             ];
+
+        T_phi(end-2:end,end-2:end)=Ta;
+%         Analysis Jaccobian. 
+%         Ja  =  inv(T_phi) * J;
+        Ja  = T_phi * J;
+    end  
+     
+    qdot = Ja' * K * errs;
     % q(t+1) = q(t) + qdot(t) * \delta t
-    q1 = q1 + qdot;% * delta_t
+    q1 = q1 + qdot; 
 
     % wrap angles for revolute joints
-%     angleraw = (q1 > pi) & jtype;
-%     q1(angleraw) = q1(angleraw) - 2*pi;
-%     angleraw = (q1 < -pi) & jtype;
-%     q1(angleraw) = q1(angleraw) + 2*pi;
+    angleraw = (q1 > pi) & ~jtype;
+    q1(angleraw) = q1(angleraw) - 2*pi;
+    angleraw = (q1 < -pi) & ~jtype;
+    q1(angleraw) = q1(angleraw) + 2*pi;
 
     Q = cat(2, Q, q1);
-    ind = ind+1
+    ind = ind+1;
 end
 
 fprintf(num2str(ind)+" iters. Point maybe unreachable.\n");
