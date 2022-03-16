@@ -49,7 +49,7 @@ else
     K = eye(dim+3);
 end
 % converging rate
-K = K * 0.05; %2d
+K = K * 0.1; %2d
 
 % q after each iteration
 Q = [q];
