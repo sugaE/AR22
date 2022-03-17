@@ -62,6 +62,7 @@ while ind <= max_ind
     p_e = T(1:dim, 4); % position
     R_e = T(1:3, 1:3); % rotation matrix
     
+    % calc euler angles base on rotation matrix
     phi_e = atan2(R_e(2,1), R_e(1,1));
     theta_e=0;
     psi_e=0;
@@ -73,7 +74,7 @@ while ind <= max_ind
     end
 
     err_pos = pdes - p_e;
-    err_ori = odes - o_e;
+    err_ori = odes - o_e; % Eq. 3.80 use euler angles for orientation error
 
     errs = [err_pos; err_ori];
     E = cat(2, E, errs);
@@ -84,19 +85,19 @@ while ind <= max_ind
  
     if dim==2
         J = cat(1,J(1:2,:),J(end,:));
-        Ja = J; 
+        Ja = J;                     % same for 2d case
     else
-        T_phi = eye(6);
-
         Ta = [
             0,-sin(phi_e), cos(phi_e)*cos(theta_e);
             0, cos(phi_e), sin(phi_e)*cos(theta_e);
-            1,0,-sin(theta_e)];
+            1,0,-sin(theta_e)];                     % Eq. 3.64
 
-        T_phi(end-2:end,end-2:end)=Ta;
+        T_phi = eye(6);
+        T_phi(end-2:end,end-2:end)=Ta;              % Eq. 3.65
 %         Analysis Jaccobian. 
-%         Ja  =  inv(T_phi) * J;
-        Ja  = T_phi * J;
+%         Ja = J;                   % not converging
+%         Ja  =  inv(T_phi) * J;    % not converging
+        Ja  = T_phi * J;            % Eq. 3.66, but should be inverse
     end  
      
     qdot = Ja' * K * errs;
