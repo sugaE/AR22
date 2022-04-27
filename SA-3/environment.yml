@@ -1,0 +1,10 @@
+# To run: conda env create -f environment.yml
+name: ar3
+channels:
+    - conda-forge
+dependencies:
+    - python
+    - pip
+    - matplotlib
+    - imageio
+    - numpy
