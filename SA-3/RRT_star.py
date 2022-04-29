@@ -1,9 +1,10 @@
 
 from __future__ import annotations
-from operator import truediv
+import imp
 import cv2
 import numpy as np
 import random
+from scipy.interpolate import splev, splprep
 from RRT import RRT
 
 
@@ -42,6 +43,7 @@ class RRT_star(RRT):
 
   def cost(self, ind):
     return self.nodes[ind][2]
+
 
   # def pos(self, ind):
   #   return self.nodes[ind][0:2]

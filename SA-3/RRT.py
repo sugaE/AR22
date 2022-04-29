@@ -3,9 +3,10 @@ import cv2
 import numpy as np
 import random
 import json
+from scipy.interpolate import splev, splprep
 
 
-class RRT(object):
+class RRT:
   WIN_NAME = 'RRT_'
   FILE_PREFIX = 'result/'+WIN_NAME
   DEBUG = False
@@ -17,6 +18,7 @@ class RRT(object):
     self.end_ind = None
     self.max_dis = maxdistance
     self.radius = radius
+    self.threshold_reach = self.radius*2
     self.max_edges = max_edges
     self.collision_dis = collision_dis
     self.mappath = mappath
@@ -45,11 +47,13 @@ class RRT(object):
       cv2.imwrite(self.FILE_PREFIX+'mapshow.png', self.mapshow)
       with open(self.FILE_PREFIX+'data.json', 'w') as f:
         json.dump({'path_exist': path_exist, 'start_point': self.start_point, 'end_point': self.end_point}, f)
-    self.findpath(self.end_ind)
+    if path_exist:
+      self.findpath(self.end_ind)
+      self.smooth_path()
     self.blockui()
 
   def buildpaths(self):
-    self.rrt()
+    return self.rrt()
     #  if self.search_dis <= 0:
     #     path_exist = self.buildpaths()
     #   else:
@@ -65,6 +69,7 @@ class RRT(object):
     # self.map = np.array(self.mapshow).T // 255
     self.map = (np.array(cv2.cvtColor(self.mapshow, cv2.COLOR_RGB2GRAY)).T)//255
     self.mapshow = ((255-self.mapshow)//2 & self.maporigin) + self.maporigin
+    cv2.imwrite(self.FILE_PREFIX+'mapshowbk.png', self.mapshow)
 
     self.w, self.h = self.map.shape
     print(self.w, self.h)
@@ -135,7 +140,7 @@ class RRT(object):
     while k <= self.max_edges:
       # check if reach end point
       dist_end = self.point2exists(self.end_point, [self.nodes[-1]])
-      if dist_end <= self.radius**2:
+      if dist_end <= self.threshold_reach**2:
         print('hoohay!')
         self.end_ind = len(self.nodes)-1
         if dist_end > 0:
@@ -173,7 +178,7 @@ class RRT(object):
         continue
 
       # fix boundary issues: -1
-      line_msk = cv2.line(np.zeros(partial_map.shape), (0, 0), (partial_map.shape[1]-1, partial_map.shape[0]-1), 1, 1)
+      line_msk = cv2.line(np.zeros(partial_map.shape), (0, 0), (partial_map.shape[1]-1, partial_map.shape[0]-1), self.radius*2, 1)
 
       # print('[k]', k+1, ':', partial_map, line_msk, partial_map.shape, t1, t2)
 
@@ -203,25 +208,102 @@ class RRT(object):
     return self.nodes[ind][0:2]
 
   def findpath(self, cur):
-    paths = []
+    # paths = []
     while cur and cur > 0:
-      paths.append(cur)
+      # paths.append(cur)
       self.path.append(self.nodes[cur])
       nxt = self.edges.get(cur)
       cv2.line(self.mapshow, self.pos(cur), self.pos(nxt), (0, 200, 200), round(self.radius/2))
       if nxt > 0:
         cv2.circle(self.mapshow, self.pos(nxt), self.radius, (200, 200, 0), -1)
       else:
-        paths.append(nxt)
+        # paths.append(nxt)
         self.path.append(self.nodes[nxt])
       cur = nxt
 
     cv2.imshow(RRT.WIN_NAME, self.mapshow)
-    paths.reverse()
-    print(paths)
+    # paths.reverse()
+    # print(paths)
     self.path.reverse()
     print(self.path)
     cv2.imwrite(self.FILE_PREFIX+'result.png', self.mapshow)
+
+  def line_path(self):
+    mapshowbk = cv2.imread(RRT.FILE_PREFIX+'mapshowbk.png')
+    map_obsticle_msk = 1-np.array(self.maporigin)//255
+
+    print('smoothing fail, fallback to connecting line...')
+
+    for i in range(len(self.path)-1):
+      cv2.line(mapshowbk, self.path[i], self.path[i+1], (0, 200, 200), self.radius*2)
+
+    clr = [0, 0, 255]
+    err, t = self.check_obsticals(mapshowbk, map_obsticle_msk)
+    print('err', err)
+    # mapshowbk = (mapshowbk*(1-t)+t*clr).astype(np.uint8)
+
+    # demonstration purpose; not in final path
+    for i in self.path:
+      cv2.circle(mapshowbk, i, self.radius, (200, 200, 0), -1)
+    cv2.imshow(RRT.WIN_NAME+'smooth', mapshowbk)
+    cv2.imwrite(RRT.FILE_PREFIX+'line.png', mapshowbk)
+
+  def smooth_path(self):
+    mapshowbk = cv2.imread(RRT.FILE_PREFIX+'mapshowbk.png')
+    # map_obsticle_msk = 1-cv2.cvtColor(self.maporigin, cv2.COLOR_BGR2GRAY)//255
+    map_obsticle_msk = 1-np.array(self.maporigin)//255
+    # map_obsticle_msk = mapshowbk_msk[np.argwhere(mapshowbk_msk == 0)]
+    # mapshowbk = self.mapshow
+    tck, u1 = splprep(np.array(self.path).T, s=0, k=3)
+    u = np.linspace(min(u1), max(u1), num=len(self.path) * self.max_dis // self.radius, endpoint=True)  # len(self.path) * self.max_dis // self.radius
+    new_points = splev(u, tck)
+    new_points = np.array(new_points).T.round().astype(int)
+
+    print('smoothing...')
+
+    line_start = None
+    line_flag = False
+    # bad_points = []
+    for i in new_points:
+      # cv2.line(self.mapshow, i, (100, 100, 0), round(self.radius/2))
+      mapcp = mapshowbk.copy()
+      cv2.circle(mapcp, i.astype(int), self.radius, (100, 0, 100, 0.5), -1)
+      if self.check_obsticals(mapcp, map_obsticle_msk)[0] > 0:
+        line_flag = True
+        # bad_points.append(i)
+      elif line_flag:
+        cv2.line(mapcp, line_start.astype(int), i.astype(int), (0, 200, 200), self.radius*2)
+        if self.check_obsticals(mapcp, map_obsticle_msk)[0] > 0:
+          continue
+        line_flag = False
+        mapshowbk = mapcp
+        line_start = i
+      else:
+        mapshowbk = mapcp
+        line_start = i
+
+    clr = [0, 0, 255]
+    err, t = self.check_obsticals(mapshowbk, map_obsticle_msk)
+    print('err', err)
+    mapshowbk = (mapshowbk*(1-t)+t*clr).astype(np.uint8)
+    cv2.imwrite(RRT.FILE_PREFIX+'smooth.png', mapshowbk)
+    # exists error or not finished due to error
+    if err > 0 or mapshowbk[self.path[-1][1], self.path[-1][0], 2] == 255:
+      self.line_path()
+      return
+
+    # demonstration purpose; not in final path
+    # for i in bad_points:
+    #   cv2.circle(mapshowbk, i.astype(int), self.radius, (0, 0, 255), -1)
+    for i in self.path:
+      cv2.circle(mapshowbk, i, self.radius, (200, 200, 0), -1)
+
+    cv2.imshow(RRT.WIN_NAME+'smooth', mapshowbk)
+
+  def check_obsticals(self, mapshowbk, map_obsticle_msk):
+    t = mapshowbk*map_obsticle_msk
+    err = np.sum(t[:, :, 2] > 0)
+    return err, t
 
   def blockui(self):
     while 1:
@@ -233,5 +315,5 @@ class RRT(object):
 
 if __name__ == '__main__':
   # for i in range(3):
-  i=0
+  i = 2
   RRT('maps/map%d.png' % (i+1), max_edges=10000)
