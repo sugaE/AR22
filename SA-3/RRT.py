@@ -1,4 +1,12 @@
+'''
+RRT:
+https://www.youtube.com/watch?v=QR3U1dgc5RE
 
+B-Spine:
+https://www.researchgate.net/publication/224264221_Interactive_Locomotion_Animation_using_Path_Planning
+https://opensourc.es/blog/b-spline/
+https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.BSpline.html#scipy.interpolate.BSpline
+'''
 import cv2
 import numpy as np
 import random
