@@ -15,11 +15,13 @@ from scipy.interpolate import splev, splprep
 
 
 class RRT:
-  WIN_NAME = 'RRT_'
-  FILE_PREFIX = 'result/'+WIN_NAME
   DEBUG = False
 
   def __init__(self, mappath='', maxdistance=50, radius=5, max_edges=10000, collision_dis=1):
+
+    self.WIN_NAME = 'RRT_'
+    self.FILE_PREFIX = 'result/'+self.WIN_NAME
+
     # self.mapshow
     self.start_point = None
     self.end_point = None
@@ -33,14 +35,19 @@ class RRT:
     self.nodes = []
     self.edges = {}
     self.path = []
+    self.found = 0
+    self.overrides()
     self.run()
+
+  def overrides(self):
+    pass
 
   def run(self):
     self.loadmap()
     path_exist = False
     if RRT.DEBUG:
       self.mapshow = cv2.imread(self.FILE_PREFIX+'mapshow.png')
-      cv2.imshow(RRT.WIN_NAME, self.mapshow)
+      cv2.imshow(self.WIN_NAME, self.mapshow)
       f = open(self.FILE_PREFIX+'data.json')
       data = json.load(f)
       self.start_point = data['start_point']
@@ -52,13 +59,25 @@ class RRT:
       f.close()
     else:
       path_exist = self.buildpaths()
-      cv2.imwrite(self.FILE_PREFIX+'mapshow.png', self.mapshow)
-      with open(self.FILE_PREFIX+'data.json', 'w') as f:
-        json.dump({'path_exist': path_exist, 'start_point': self.start_point, 'end_point': self.end_point, 'end_index': self.end_ind, 'nodes': np.array(self.nodes).tolist(), 'edges': self.edges}, f)
+      self.dump_result(path_exist)
     if path_exist:
       self.findpath(self.end_ind)
       self.smooth_path(False)
     self.blockui()
+
+  def dump_result(self, path_exist=1):
+    cv2.imwrite(self.FILE_PREFIX+'mapshow.png', self.mapshow)
+    with open(self.FILE_PREFIX+'data.json', 'w') as f:
+      json.dump({
+          'path_exist': path_exist,
+          'start_point': self.start_point,
+          'end_point': self.end_point,
+          'end_index': int(self.end_ind),
+          'nodes': np.asarray(self.nodes, dtype=object).tolist(),
+          'edges': json.dumps(self.edges)
+      }, f)
+      #
+    print(path_exist)
 
   def buildpaths(self):
     return self.rrt()
@@ -82,13 +101,13 @@ class RRT:
     self.w, self.h = self.map.shape
     print(self.w, self.h)
 
-    cv2.namedWindow(RRT.WIN_NAME)
+    cv2.namedWindow(self.WIN_NAME)
     if RRT.DEBUG:
       return
 
-    cv2.imshow(RRT.WIN_NAME, self.mapshow)
+    cv2.imshow(self.WIN_NAME, self.mapshow)
     self.flag_readpos = 2
-    cv2.setMouseCallback(RRT.WIN_NAME, self.readPos)
+    cv2.setMouseCallback(self.WIN_NAME, self.readPos)
 
     while self.flag_readpos:
       cv2.waitKey(1)
@@ -106,7 +125,7 @@ class RRT:
     if event == cv2.EVENT_MOUSEMOVE:
       mapCopy = self.mapshow.copy()
       cv2.circle(mapCopy, (x, y), self.radius, (0, 0, 255) if not isValid else ((0, 255, 0)if self.flag_readpos == 2 else (255, 0, 0)), -1)
-      cv2.imshow(RRT.WIN_NAME, mapCopy)
+      cv2.imshow(self.WIN_NAME, mapCopy)
       # check if in obsticle
     if event == cv2.EVENT_LBUTTONDOWN and isValid:
       self.flag_readpos = max(self.flag_readpos-1, 0)
@@ -116,7 +135,7 @@ class RRT:
       else:
         self.end_point = [x, y]
         cv2.circle(self.mapshow, (x, y), self.radius, (255, 0, 0), -1)
-      cv2.imshow(RRT.WIN_NAME, self.mapshow)
+      cv2.imshow(self.WIN_NAME, self.mapshow)
 
     # Algorithm BuildRRT
     #     Input: Initial configuration qinit, number of vertices in RRT K, incremental distance Δq
@@ -147,7 +166,7 @@ class RRT:
 
     while k <= self.max_edges:
       # check if reach end point
-      dist_end = self.point2exists(self.end_point, [self.nodes[-1]])
+      dist_end = self.point2exists(self.end_point, [self.nodes[-1]])[0]
       if dist_end <= self.threshold_reach**2:
         print('hoohay!')
         self.end_ind = len(self.nodes)-1
@@ -193,19 +212,11 @@ class RRT:
       if line_msk.sum() == np.multiply(partial_map, line_msk).sum():
         # self.linkrrt(cur_node, ind_near, dist_cur)
         # add new node and edge
-        self.nodes.append(cur_node)
-        lst_edge = [ind_near, len(self.nodes)-1]
-        # self.edges[lst_edge[1]] = lst_edge[0]
-        self.edge(*lst_edge)
+
+        self.connect_edge(ind_near, 0, cur_node)
         k += 1
-
-        # rrt*
-        cv2.circle(self.mapshow, cur_node, 2, (0, 0, 255), -1)
-        cv2.line(self.mapshow, self.nodes[lst_edge[0]], self.nodes[lst_edge[1]], (100, 100, 100))
-        # cv2.putText(self.mapshow, str(k), cur_node, fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=.3, color=(111, 111, 111))
-
         # Using cv2.putText() method
-        # cv2.imshow(RRT.WIN_NAME, self.mapshow)
+        # cv2.imshow(self.WIN_NAME, self.mapshow)
         # rrt*
       else:
         # TODO return nearest valid point
@@ -214,33 +225,49 @@ class RRT:
     # no valid path found
     return 0
 
+  def connect_edge(self, n1_ind, n2_ind, cur_node=None):
+    if cur_node is not None:
+        self.nodes.append(cur_node)
+        n2_ind = len(self.nodes)-1
+        cv2.circle(self.mapshow, cur_node[0:2], 2, (0, 0, 255), -1)
+
+    lst_edge = [n1_ind, n2_ind]
+    # self.edges[lst_edge[1]] = lst_edge[0]
+    self.edge(*lst_edge)
+
+    # rrt*
+    cv2.line(self.mapshow, self.nodes[lst_edge[0]][0:2], self.nodes[lst_edge[1]][0:2], (100, 100, 100))
+    # cv2.putText(self.mapshow, str(k), cur_node, fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=.3, color=(111, 111, 111))
+    return n2_ind
+
   def pos(self, ind):
     return self.nodes[ind][0:2]
 
   def findpath(self, cur):
-    # paths = []
+    paths = []
+    self.path = []
     while cur and cur > 0:
-      # paths.append(cur)
+      paths.append(cur)
       self.path.append(self.nodes[cur])
       nxt = self.edges.get(cur)
       cv2.line(self.mapshow, self.pos(cur), self.pos(nxt), (0, 200, 200), round(self.radius/2))
       if nxt > 0:
         cv2.circle(self.mapshow, self.pos(nxt), self.radius, (200, 200, 0), -1)
       else:
-        # paths.append(nxt)
+        paths.append(nxt)
         self.path.append(self.nodes[nxt])
       cur = nxt
 
-    cv2.imshow(RRT.WIN_NAME, self.mapshow)
-    # paths.reverse()
-    # print(paths)
+    cv2.imshow(self.WIN_NAME, self.mapshow)
+    paths.reverse()
+    print('----%d----\n' % self.found, paths)
     self.path.reverse()
-    print(self.path)
+    print('----%d----\n' % self.found, self.path)
     cv2.imwrite(self.FILE_PREFIX+'result.png', self.mapshow)
 
 
   def smooth_path(self, use_smooth = True):
-    mapshowbk = cv2.imread(RRT.FILE_PREFIX+'mapshowbk.png')
+    mapshowbk = cv2.imread(self.FILE_PREFIX+'mapshowbk.png')
     # map_obsticle_msk = 1-cv2.cvtColor(self.maporigin, cv2.COLOR_BGR2GRAY)//255
     map_obsticle_msk = 1-np.array(self.maporigin)//255
     # map_obsticle_msk = mapshowbk_msk[np.argwhere(mapshowbk_msk == 0)]
@@ -279,7 +306,7 @@ class RRT:
       err, t = self.check_obsticals(mapshowbk, map_obsticle_msk)
       print('err', err)
       mapshowbk = (mapshowbk*(1-t)+t*clr).astype(np.uint8)
-      cv2.imwrite(RRT.FILE_PREFIX+'smooth.png', mapshowbk)
+      cv2.imwrite(self.FILE_PREFIX+'smooth_%d.png' % self.found, mapshowbk)
       # exists error or not finished due to error
       if err > 0 or mapshowbk[self.path[-1][1], self.path[-1][0], 2] == 255:
         self.smooth_path(use_smooth=False)
@@ -288,7 +315,7 @@ class RRT:
       print('smoothing fail, fallback to connecting line...')
 
       for i in range(len(self.path)-1):
-        cv2.line(mapshowbk, self.path[i], self.path[i+1], (0, 200, 200), self.radius*2)
+        cv2.line(mapshowbk, self.path[i][0:2], self.path[i+1][0:2], (0, 200, 200), self.radius*2)
 
       err, t = self.check_obsticals(mapshowbk, map_obsticle_msk)
       print('err', err)
@@ -297,10 +324,10 @@ class RRT:
     # for i in bad_points:
     #   cv2.circle(mapshowbk, i.astype(int), self.radius, (0, 0, 255), -1)
     for i in self.path:
-      cv2.circle(mapshowbk, i, self.radius, (200, 200, 0), -1)
+      cv2.circle(mapshowbk, i[0:2], self.radius, (200, 200, 0), -1)
 
-    cv2.imwrite(RRT.FILE_PREFIX+'result_path.png', mapshowbk)
-    cv2.imshow(RRT.WIN_NAME+'result', mapshowbk)
+    cv2.imwrite(self.FILE_PREFIX+'result_%d.png' % self.found, mapshowbk)
+    cv2.imshow(self.WIN_NAME+'result%d' % self.found, mapshowbk)
 
   def check_obsticals(self, mapshowbk, map_obsticle_msk):
     t = mapshowbk*map_obsticle_msk
