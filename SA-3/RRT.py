@@ -54,10 +54,10 @@ class RRT:
       path_exist = self.buildpaths()
       cv2.imwrite(self.FILE_PREFIX+'mapshow.png', self.mapshow)
       with open(self.FILE_PREFIX+'data.json', 'w') as f:
-        json.dump({'path_exist': path_exist, 'start_point': self.start_point, 'end_point': self.end_point}, f)
+        json.dump({'path_exist': path_exist, 'start_point': self.start_point, 'end_point': self.end_point, 'end_index': self.end_ind, 'nodes': np.array(self.nodes).tolist(), 'edges': self.edges}, f)
     if path_exist:
       self.findpath(self.end_ind)
-      self.smooth_path()
+      self.smooth_path(False)
     self.blockui()
 
   def buildpaths(self):
@@ -154,7 +154,7 @@ class RRT:
         if dist_end > 0:
           # self.edges[self.end_ind+1] = self.end_ind
           self.edge(self.end_ind, self.end_ind+1)
-          self.nodes.append(self.end_point)
+          self.nodes.append(self.end_point) # rrt*
           self.end_ind += 1
         return 1
 
@@ -163,7 +163,7 @@ class RRT:
       if not self.checkPointValid(x, y):
         # TODO return nearest valid point
         continue
-      cur_node = [x, y]
+      cur_node = [x, y]  # rrt*
       dist_cur = self.point2exists(cur_node, self.nodes)
       ind_near = np.argmin(dist_cur)
       dis_near = dist_cur[ind_near]
@@ -175,7 +175,7 @@ class RRT:
       if dis_near > self.max_dis**2:
         vec = np.array(cur_node)-np.array(near_node)
         vec = vec/np.linalg.norm(vec)*self.max_dis
-        cur_node = near_node + np.array(vec).astype(int)
+        cur_node = near_node + np.array(vec).astype(int)  # rrt*
 
       # check if exists obsticles along path
       t1 = (near_node[0], cur_node[0]) if near_node[0] <= cur_node[0] else (cur_node[0], near_node[0])
@@ -199,12 +199,14 @@ class RRT:
         self.edge(*lst_edge)
         k += 1
 
+        # rrt*
         cv2.circle(self.mapshow, cur_node, 2, (0, 0, 255), -1)
         cv2.line(self.mapshow, self.nodes[lst_edge[0]], self.nodes[lst_edge[1]], (100, 100, 100))
         # cv2.putText(self.mapshow, str(k), cur_node, fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=.3, color=(111, 111, 111))
 
         # Using cv2.putText() method
-        cv2.imshow(RRT.WIN_NAME, self.mapshow)
+        # cv2.imshow(RRT.WIN_NAME, self.mapshow)
+        # rrt*
       else:
         # TODO return nearest valid point
         pass
@@ -236,69 +238,60 @@ class RRT:
     print(self.path)
     cv2.imwrite(self.FILE_PREFIX+'result.png', self.mapshow)
 
-  def line_path(self):
-    mapshowbk = cv2.imread(RRT.FILE_PREFIX+'mapshowbk.png')
-    map_obsticle_msk = 1-np.array(self.maporigin)//255
 
-    print('smoothing fail, fallback to connecting line...')
-
-    for i in range(len(self.path)-1):
-      cv2.line(mapshowbk, self.path[i], self.path[i+1], (0, 200, 200), self.radius*2)
-
-    clr = [0, 0, 255]
-    err, t = self.check_obsticals(mapshowbk, map_obsticle_msk)
-    print('err', err)
-    # mapshowbk = (mapshowbk*(1-t)+t*clr).astype(np.uint8)
-
-    # demonstration purpose; not in final path
-    for i in self.path:
-      cv2.circle(mapshowbk, i, self.radius, (200, 200, 0), -1)
-    cv2.imshow(RRT.WIN_NAME+'smooth', mapshowbk)
-    cv2.imwrite(RRT.FILE_PREFIX+'line.png', mapshowbk)
-
-  def smooth_path(self):
+  def smooth_path(self, use_smooth = True):
     mapshowbk = cv2.imread(RRT.FILE_PREFIX+'mapshowbk.png')
     # map_obsticle_msk = 1-cv2.cvtColor(self.maporigin, cv2.COLOR_BGR2GRAY)//255
     map_obsticle_msk = 1-np.array(self.maporigin)//255
     # map_obsticle_msk = mapshowbk_msk[np.argwhere(mapshowbk_msk == 0)]
     # mapshowbk = self.mapshow
-    tck, u1 = splprep(np.array(self.path).T, s=0, k=3)
-    u = np.linspace(min(u1), max(u1), num=len(self.path) * self.max_dis // self.radius, endpoint=True)  # len(self.path) * self.max_dis // self.radius
-    new_points = splev(u, tck)
-    new_points = np.array(new_points).T.round().astype(int)
 
-    print('smoothing...')
+    if use_smooth:
+      tck, u1 = splprep(np.array(self.path).T, s=0, k=3)
+      u = np.linspace(min(u1), max(u1), num=len(self.path) * self.max_dis // self.radius, endpoint=True)  # len(self.path) * self.max_dis // self.radius
+      new_points = splev(u, tck)
+      new_points = np.array(new_points).T.round().astype(int)
 
-    line_start = None
-    line_flag = False
-    # bad_points = []
-    for i in new_points:
-      # cv2.line(self.mapshow, i, (100, 100, 0), round(self.radius/2))
-      mapcp = mapshowbk.copy()
-      cv2.circle(mapcp, i.astype(int), self.radius, (100, 0, 100, 0.5), -1)
-      if self.check_obsticals(mapcp, map_obsticle_msk)[0] > 0:
-        line_flag = True
-        # bad_points.append(i)
-      elif line_flag:
-        cv2.line(mapcp, line_start.astype(int), i.astype(int), (0, 200, 200), self.radius*2)
+      print('smoothing...')
+
+      line_start = None
+      line_flag = False
+      # bad_points = []
+      for i in new_points:
+        # cv2.line(self.mapshow, i, (100, 100, 0), round(self.radius/2))
+        mapcp = mapshowbk.copy()
+        cv2.circle(mapcp, i.astype(int), self.radius, (100, 0, 100, 0.5), -1)
         if self.check_obsticals(mapcp, map_obsticle_msk)[0] > 0:
-          continue
-        line_flag = False
-        mapshowbk = mapcp
-        line_start = i
-      else:
-        mapshowbk = mapcp
-        line_start = i
+          line_flag = True
+          # bad_points.append(i)
+        elif line_flag:
+          cv2.line(mapcp, line_start.astype(int), i.astype(int), (0, 200, 200), self.radius*2)
+          if self.check_obsticals(mapcp, map_obsticle_msk)[0] > 0:
+            continue
+          line_flag = False
+          mapshowbk = mapcp
+          line_start = i
+        else:
+          mapshowbk = mapcp
+          line_start = i
 
-    clr = [0, 0, 255]
-    err, t = self.check_obsticals(mapshowbk, map_obsticle_msk)
-    print('err', err)
-    mapshowbk = (mapshowbk*(1-t)+t*clr).astype(np.uint8)
-    cv2.imwrite(RRT.FILE_PREFIX+'smooth.png', mapshowbk)
-    # exists error or not finished due to error
-    if err > 0 or mapshowbk[self.path[-1][1], self.path[-1][0], 2] == 255:
-      self.line_path()
-      return
+      clr = [0, 0, 255]
+      err, t = self.check_obsticals(mapshowbk, map_obsticle_msk)
+      print('err', err)
+      mapshowbk = (mapshowbk*(1-t)+t*clr).astype(np.uint8)
+      cv2.imwrite(RRT.FILE_PREFIX+'smooth.png', mapshowbk)
+      # exists error or not finished due to error
+      if err > 0 or mapshowbk[self.path[-1][1], self.path[-1][0], 2] == 255:
+        self.smooth_path(use_smooth=False)
+        return
+    else:
+      print('smoothing fail, fallback to connecting line...')
+
+      for i in range(len(self.path)-1):
+        cv2.line(mapshowbk, self.path[i], self.path[i+1], (0, 200, 200), self.radius*2)
+
+      err, t = self.check_obsticals(mapshowbk, map_obsticle_msk)
+      print('err', err)
 
     # demonstration purpose; not in final path
     # for i in bad_points:
@@ -306,7 +299,8 @@ class RRT:
     for i in self.path:
       cv2.circle(mapshowbk, i, self.radius, (200, 200, 0), -1)
 
-    cv2.imshow(RRT.WIN_NAME+'smooth', mapshowbk)
+    cv2.imwrite(RRT.FILE_PREFIX+'result_path.png', mapshowbk)
+    cv2.imshow(RRT.WIN_NAME+'result', mapshowbk)
 
   def check_obsticals(self, mapshowbk, map_obsticle_msk):
     t = mapshowbk*map_obsticle_msk
