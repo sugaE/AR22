@@ -102,11 +102,12 @@ class RRT_star(RRT):
       dist_cur = self.point2exists(cur_node, self.nodes)
       ind_near = np.argmin(dist_cur)
       dis_near = dist_cur[ind_near]
+      # repeat points
+      if dis_near <= 1:
+        continue
       near_node = self.nodes[ind_near]
       cur_changed = False
-      # repeat points
-      if dis_near <= 0:
-        continue
+
       # check max distance
       if dis_near > self.max_dis**2:
         vec = np.array(cur_node)-np.array(near_node)
@@ -137,38 +138,41 @@ class RRT_star(RRT):
         # self.nodes.append(cur_node)
 
         # dist_cur = dist_cur[dist_cur < self.search_dis]
-        inds_near_unsort = np.argwhere(dist_cur < self.search_dis)
+        inds_near_unsort = np.nonzero(dist_cur < self.search_dis)[0]
         if len(inds_near_unsort):
           # inds_near_unsort = np.argpartition(dist_cur, 5)
-          inds_near = [x[0] for x in inds_near_unsort]
+          # inds_near = [x[0] for x in inds_near_unsort]
           # inds_near = inds_near_unsort[np.argsort(dist_cur[inds_near_unsort] )]
-          min_dist = np.inf
-          min_i = 0
+          min_i = inds_near_unsort[np.argmin(dist_cur[inds_near_unsort]+np.array(self.nodes)[inds_near_unsort, 2])]
+          min_dist = dist_cur[min_i]+self.cost(min_i)
           # connecting to least cost node
-          for i in inds_near:
-            t = dist_cur[i]+self.cost(i)
-            if t < min_dist:
-              min_i = i
-              min_dist = t
+          # for i in inds_near:
+          #   t = dist_cur[i]+self.cost(i)
+          #   if t < min_dist:
+          #     min_i = i
+          #     min_dist = t
 
           # update cost
           cur_node[2] = min_dist
           new_ind = self.connect_edge(min_i, 0, cur_node)
+          k += 1
 
           # update other edges cost within area
-          for i in inds_near:
-            if i != min_i:
-              if self.edges.get(i) == min_i:
-                cost_gap = min_dist + dist_cur[i]-self.cost(i)
-                if cost_gap < 0:
-                  # update sequence cost
-                  self.edge(new_ind, i)
-                  t = self.update_cost(i, cost_gap)
-                  if t:
-                    return self.found
+          cost_gaps = min_dist + dist_cur[inds_near_unsort]-np.array(self.nodes)[inds_near_unsort, 2]
+          cost_gaps_ind = np.nonzero(cost_gaps < -1)[0]
+          for i in cost_gaps_ind:
+            # if i != min_i and self.edges.get(i) == min_i:
+            #   cost_gap = min_dist + dist_cur[i]-self.cost(i)
+            #   if cost_gap < -1:
+            # update sequence cost
+            self.edge(new_ind, i)
+            t = self.update_cost(i, cost_gaps[i])
+            if t:
+              return self.found
         else:
           cur_node[2] = dist_cur[ind_near] + self.cost(ind_near)
           self.connect_edge(ind_near, 0, cur_node)
+          k += 1
         # *****************
 
       else:
@@ -179,6 +183,8 @@ class RRT_star(RRT):
     return self.found
 
   def update_cost(self, ind, gap):
+    if gap >= -1:
+      return 0
     self.nodes[ind][2] += gap
 
     if ind == self.end_ind and self.found > 0:
