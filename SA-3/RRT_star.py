@@ -124,11 +124,10 @@ class RRT_star(RRT):
         continue
 
       # fix boundary issues: -1
-      line_msk = cv2.line(np.zeros(partial_map.shape), (0, 0), (partial_map.shape[1]-1, partial_map.shape[0]-1), 1, 1)
-
+      line_msk = cv2.line(np.zeros(partial_map.shape), (near_node[1]-t2[0], near_node[0]-t1[0]), (cur_node[1]-t2[0], cur_node[0]-t1[0]), 1, self.radius*2)
       # print('[k]', k+1, ':', partial_map, line_msk, partial_map.shape, t1, t2)
-
-      if line_msk.sum() == np.multiply(partial_map, line_msk).sum():
+      msk_diff = line_msk - np.multiply(partial_map, line_msk)
+      if np.sum(np.abs(msk_diff)) == 0:
         # *****************
         if cur_changed:
           dist_cur = self.point2exists(cur_node, self.nodes)
@@ -165,10 +164,43 @@ class RRT_star(RRT):
             #   cost_gap = min_dist + dist_cur[i]-self.cost(i)
             #   if cost_gap < -1:
             # update sequence cost
-            self.edge(new_ind, i)
-            t = self.update_cost(i, cost_gaps[i])
-            if t:
-              return self.found
+            x = inds_near_unsort[i]
+            # if x == 0:
+            #   print('ops loop,0, pass')
+            # elif
+
+            # ++++++++++++++++++++
+
+            # check if exists obsticles along path
+            near_node = self.nodes[x]
+            t1 = (near_node[0], cur_node[0]) if near_node[0] <= cur_node[0] else (cur_node[0], near_node[0])
+            t2 = (near_node[1], cur_node[1]) if near_node[1] <= cur_node[1] else (cur_node[1], near_node[1])
+            partial_map = self.map[t1[0]:t1[1], t2[0]:t2[1]]
+            if partial_map.shape[1] == 0 or partial_map.shape[0] == 0:
+              # TODO deal with line
+              continue
+
+            # fix boundary issues: -1
+            # line_msk = cv2.line(np.zeros(partial_map.shape), (0, 0), (partial_map.shape[1]-1, partial_map.shape[0]-1), 1, self.radius*2)
+            line_msk = cv2.line(np.zeros(partial_map.shape), (near_node[1]-t2[0], near_node[0]-t1[0]), (cur_node[1]-t2[0], cur_node[0]-t1[0]), 1, self.radius*2)
+            # print('[k]', k+1, ':', partial_map, line_msk, partial_map.shape, t1, t2)
+            msk_diff = line_msk - np.multiply(partial_map, line_msk)
+            if np.sum(np.abs(msk_diff)) == 0:
+              # ++++++++++++++++++++++
+              loop = self.findloop(new_ind, x)
+              if loop > 0 or x == 0:
+                # self.edges.pop(loop)
+                # self.edge(loop, x)
+                # self.edge(new_ind, i)
+                # print('ops loop, %d -> %d', new_ind, x)
+                # else:
+                # print('loop, %d -> %d', loop, x)
+                pass
+              else:
+                self.edge(new_ind, x)
+                t = self.update_cost(x, cost_gaps[i])
+                if t:
+                  return self.found
         else:
           cur_node[2] = dist_cur[ind_near] + self.cost(ind_near)
           self.connect_edge(ind_near, 0, cur_node)
@@ -182,10 +214,22 @@ class RRT_star(RRT):
     # no valid path found
     return self.found
 
+  def findloop(self, end, start):
+    cur = end
+    pre = -1
+    while cur:
+      if cur == start:
+        return pre
+      else:
+        pre = cur
+      cur = self.edges.get(cur)
+    return -1
+
+
   def update_cost(self, ind, gap):
     if gap >= -1:
       return 0
-    self.nodes[ind][2] += gap
+    self.nodes[ind][2] = max(0, self.nodes[ind][2] + gap)
 
     if ind == self.end_ind and self.found > 0:
       self.found += 1
@@ -210,4 +254,5 @@ class RRT_star(RRT):
 
 
 if __name__ == '__main__':
-  RRT_star('maps/map2.png', max_edges=1000, star_search_dis=25)
+  # RRT_star('maps/map2.png', max_edges=1000, star_search_dis=25)
+  RRT_star('maps/map1.png', max_edges=1000, star_search_dis=50, radius=10, maxdistance=100, collision_dis=2)

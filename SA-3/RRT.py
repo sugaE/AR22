@@ -205,7 +205,7 @@ class RRT:
         continue
 
       # fix boundary issues: -1
-      line_msk = cv2.line(np.zeros(partial_map.shape), (0, 0), (partial_map.shape[1]-1, partial_map.shape[0]-1), self.radius*2, 1)
+      line_msk = cv2.line(np.zeros(partial_map.shape), (0, 0), (partial_map.shape[1]-1, partial_map.shape[0]-1), 1, self.radius*2)
 
       # print('[k]', k+1, ':', partial_map, line_msk, partial_map.shape, t1, t2)
 
