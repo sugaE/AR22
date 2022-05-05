@@ -128,11 +128,11 @@ class RRT_star(RRT):
         # inds_near = [x[0] for x in inds_near_unsort]
         # inds_near = inds_near_unsort[np.argsort(dist_cur[inds_near_unsort] )]
         min_i = inds_near_unsort[np.argmin(dist_cur[inds_near_unsort]+np.array(self.nodes)[inds_near_unsort, 2])]
-        min_dist = dist_cur[min_i]+self.cost(min_i)
 
         # update cost
-        cur_node[2] = min_dist
         if self.checkLineValid(self.nodes[min_i], cur_node, k):
+          min_dist = dist_cur[min_i]+self.cost(min_i)
+          cur_node[2] = min_dist
           new_ind = self.connect_edge(min_i, 0, cur_node)
           k += 1
         else:
@@ -145,9 +145,9 @@ class RRT_star(RRT):
           x = inds_near_unsort[i]
           # ++++++++++++++++++++
 
-          if x > 0 and self.checkLineValid(near_node, cur_node, k) and self.findloop(new_ind, x) > 0:
+          if x > 0 and self.checkLineValid(self.nodes[x], cur_node, k) and self.findloop(new_ind, x) < 0:
             # ++++++++++++++++++++++
-            self.edge(new_ind, x)
+            self.connect_edge(new_ind, x)
             t = self.update_cost(x, cost_gaps[i])
             if t:
               return self.found
