@@ -14,6 +14,9 @@ import json
 from scipy.interpolate import splev, splprep
 
 
+def Tree(x, y, cost=0):
+  return [int(x), int(y)]  # , parent
+
 class RRT:
   DEBUG = False
 
@@ -72,9 +75,9 @@ class RRT:
           'path_exist': path_exist,
           'start_point': self.start_point,
           'end_point': self.end_point,
-          'end_index': int(self.end_ind),
-          'nodes': np.asarray(self.nodes, dtype=object).tolist(),
-          'edges': json.dumps(self.edges)
+          'end_index': int(self.end_ind or -1),
+          'nodes': np.array(self.nodes).tolist(),
+          'edges': self.edges
       }, f)
       #
     print(path_exist)
@@ -115,7 +118,44 @@ class RRT:
     print(self.start_point, self.end_point)
 
   def checkPointValid(self, x, y):
-      return self.map[x, y] > 0
+    # radius check will be done in line check
+    return self.map[x, y] > 0  # and self.map[x-self.radius:x+self.radius, y-self.radius:y+self.radius]
+
+  def checkLineValid(self, p_from, p_to, k=0):
+    # check if exists obsticles along path
+    t1 = [p_from[0], p_to[0]] if p_from[0] <= p_to[0] else [p_to[0], p_from[0]]
+    t2 = [p_from[1], p_to[1]] if p_from[1] <= p_to[1] else [p_to[1], p_from[1]]
+    t1 = np.array(t1)  # - self.radius
+    t2 = np.array(t2)  # + self.radius
+    partial_map = 1 - self.map[t1[0]:t1[1], t2[0]:t2[1]]
+
+    # deal with line
+    if partial_map.shape[1] == 0 or partial_map.shape[0] == 0:
+      return 0
+
+    if np.array(partial_map).sum() == 0:
+      return 1
+
+    # fix boundary issues: -1
+    lt = np.array([t2[0],t1[0]])
+    p_from_cv = [p_from[1], p_from[0]] - lt
+    p_to_cv = [p_to[1], p_to[0]] - lt
+    line_msk = cv2.line(np.zeros(partial_map.shape), p_from_cv, p_to_cv, 1, self.radius*2)
+
+    if np.multiply(partial_map, line_msk).sum() > 0:
+      # add new node and edge
+      return 0
+    else:
+      # print('[k]', k+1, ':', np.multiply(partial_map, line_msk).sum(), partial_map.shape, ';', p_from_cv, p_to_cv, '\n',  partial_map, '\n', line_msk)
+      return 1
+
+  def drawStartEnd(self, p1=1, p2=1, map=None):
+    if map is None:
+      map = self.mapshow
+    if p1:
+      cv2.circle(map, self.start_point[0:2], self.radius, (0, 255, 0), -1)
+    if p2:
+      cv2.circle(map, self.end_point[0:2], self.radius, (255, 0, 0), -1)
 
   def readPos(self, event, x, y, flags, param):
     if not self.flag_readpos:
@@ -131,27 +171,13 @@ class RRT:
       self.flag_readpos = max(self.flag_readpos-1, 0)
       if self.flag_readpos == 1:
         self.start_point = [x, y]
-        cv2.circle(self.mapshow, (x, y), self.radius, (0, 255, 0), -1)
+        # cv2.circle(self.mapshow, (x, y), self.radius, (0, 255, 0), -1)
+        self.drawStartEnd(1, 0)
       else:
         self.end_point = [x, y]
-        cv2.circle(self.mapshow, (x, y), self.radius, (255, 0, 0), -1)
+        # cv2.circle(self.mapshow, (x, y), self.radius, (255, 0, 0), -1)
+        self.drawStartEnd(0, 1)
       cv2.imshow(self.WIN_NAME, self.mapshow)
-
-    # Algorithm BuildRRT
-    #     Input: Initial configuration qinit, number of vertices in RRT K, incremental distance Δq
-    #     Output: RRT graph G
-
-    #     G.init(qinit)
-    #     for k = 1 to K do
-    #         qrand ← RAND_CONF()
-    #         qnear ← NEAREST_VERTEX(qrand, G)
-    #         qnew ← NEW_CONF(qnear, qrand, Δq)
-    #         G.add_vertex(qnew)
-    #         G.add_edge(qnear, qnew)
-    #     return G
-
-  # def point2exists(self, point1, points):
-  #   return np.sum((np.array(points) - np.array(point1))**2, axis=1)
 
   def point2exists(self, point1, trees):
     return np.sum((np.array(trees)[:, 0:2] - np.array(point1[0:2]))**2, axis=1)
@@ -159,6 +185,18 @@ class RRT:
   def edge(self, v, k):
     self.edges[int(k)] = int(v)
 
+  # Algorithm BuildRRT
+  #     Input: Initial configuration qinit, number of vertices in RRT K, incremental distance Δq
+  #     Output: RRT graph G
+
+  #     G.init(qinit)
+  #     for k = 1 to K do
+  #         qrand ← RAND_CONF()
+  #         qnear ← NEAREST_VERTEX(qrand, G)
+  #         qnew ← NEW_CONF(qnear, qrand, Δq)
+  #         G.add_vertex(qnew)
+  #         G.add_edge(qnear, qnew)
+  #     return G
 
   def rrt(self) -> int:
     self.nodes.append(self.start_point)
@@ -167,13 +205,13 @@ class RRT:
     while k <= self.max_edges:
       # check if reach end point
       dist_end = self.point2exists(self.end_point, [self.nodes[-1]])[0]
-      if dist_end <= self.threshold_reach**2:
+      if dist_end <= self.threshold_reach**2 and self.checkLineValid(self.nodes[-1], self.end_point, k):
         print('hoohay!')
         self.end_ind = len(self.nodes)-1
         if dist_end > 0:
           # self.edges[self.end_ind+1] = self.end_ind
           self.edge(self.end_ind, self.end_ind+1)
-          self.nodes.append(self.end_point) # rrt*
+          self.nodes.append(self.end_point)  # rrt*
           self.end_ind += 1
         return 1
 
@@ -195,28 +233,13 @@ class RRT:
         vec = np.array(cur_node)-np.array(near_node)
         vec = vec/np.linalg.norm(vec)*self.max_dis
         cur_node = near_node + np.array(vec).astype(int)  # rrt*
+        if not self.checkPointValid(*cur_node[0:2]):
+          continue
 
       # check if exists obsticles along path
-      t1 = (near_node[0], cur_node[0]) if near_node[0] <= cur_node[0] else (cur_node[0], near_node[0])
-      t2 = (near_node[1], cur_node[1]) if near_node[1] <= cur_node[1] else (cur_node[1], near_node[1])
-      partial_map = self.map[t1[0]:t1[1], t2[0]:t2[1]]
-      if partial_map.shape[1] == 0 or partial_map.shape[0] == 0:
-        # TODO deal with line
-        continue
-
-      # fix boundary issues: -1
-      line_msk = cv2.line(np.zeros(partial_map.shape), (0, 0), (partial_map.shape[1]-1, partial_map.shape[0]-1), 1, self.radius*2)
-
-      # print('[k]', k+1, ':', partial_map, line_msk, partial_map.shape, t1, t2)
-
-      if line_msk.sum() == np.multiply(partial_map, line_msk).sum():
-        # self.linkrrt(cur_node, ind_near, dist_cur)
-        # add new node and edge
-
+      if self.checkLineValid(near_node, cur_node, k):
         self.connect_edge(ind_near, 0, cur_node)
         k += 1
-        # Using cv2.putText() method
-        # cv2.imshow(self.WIN_NAME, self.mapshow)
         # rrt*
       else:
         # TODO return nearest valid point
@@ -227,9 +250,9 @@ class RRT:
 
   def connect_edge(self, n1_ind, n2_ind, cur_node=None):
     if cur_node is not None:
-        self.nodes.append(cur_node)
-        n2_ind = len(self.nodes)-1
-        cv2.circle(self.mapshow, cur_node[0:2], 2, (0, 0, 255), -1)
+      self.nodes.append(cur_node)
+      n2_ind = len(self.nodes)-1
+      cv2.circle(self.mapshow, cur_node[0:2], 2, (0, 0, 255), -1)
 
     lst_edge = [n1_ind, n2_ind]
     # self.edges[lst_edge[1]] = lst_edge[0]
@@ -238,6 +261,7 @@ class RRT:
     # rrt*
     cv2.line(self.mapshow, self.nodes[lst_edge[0]][0:2], self.nodes[lst_edge[1]][0:2], (100, 100, 100))
     # cv2.putText(self.mapshow, str(k), cur_node, fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=.3, color=(111, 111, 111))
+    cv2.imshow(self.WIN_NAME, self.mapshow)
     return n2_ind
 
   def pos(self, ind):
@@ -265,8 +289,7 @@ class RRT:
     print('----%d----\n' % self.found, self.path)
     cv2.imwrite(self.FILE_PREFIX+'result.png', self.mapshow)
 
-
-  def smooth_path(self, use_smooth = True):
+  def smooth_path(self, use_smooth=True):
     mapshowbk = cv2.imread(self.FILE_PREFIX+'mapshowbk.png')
     # map_obsticle_msk = 1-cv2.cvtColor(self.maporigin, cv2.COLOR_BGR2GRAY)//255
     map_obsticle_msk = 1-np.array(self.maporigin)//255
@@ -326,6 +349,7 @@ class RRT:
     for i in self.path:
       cv2.circle(mapshowbk, i[0:2], self.radius, (200, 200, 0), -1)
 
+    self.drawStartEnd(map=mapshowbk)
     cv2.imwrite(self.FILE_PREFIX+'result_%d.png' % self.found, mapshowbk)
     cv2.imshow(self.WIN_NAME+'result%d' % self.found, mapshowbk)
 
@@ -335,14 +359,15 @@ class RRT:
     return err, t
 
   def blockui(self):
+    print('exit by esc')
     while 1:
       k = cv2.waitKey(1) & 0xFF
       if k == 27:
-          break
+        break
     cv2.destroyAllWindows()
 
 
 if __name__ == '__main__':
   # for i in range(3):
   i = 2
-  RRT('maps/map%d.png' % (i+1), max_edges=10000)
+  RRT('maps/map%d.png' % (i+1), max_edges=5000)
