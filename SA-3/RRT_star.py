@@ -147,8 +147,9 @@ class RRT_star(RRT):
 
           if x > 0 and self.checkLineValid(self.nodes[x], cur_node, k) and self.findloop(new_ind, x) < 0:
             # ++++++++++++++++++++++
-            self.connect_edge(new_ind, x)
+            self.connect_edge(-1, x)
             t = self.update_cost(x, cost_gaps[i])
+            self.connect_edge(new_ind, x)
             if t:
               return self.found
       elif self.checkLineValid(near_node, cur_node, k):
@@ -176,7 +177,7 @@ class RRT_star(RRT):
 
 
   def update_cost(self, ind, gap):
-    if gap >= -1:
+    if gap >= -1 or ind<=0:
       return 0
     self.nodes[ind][2] = max(0, self.nodes[ind][2] + gap)
 

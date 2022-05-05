@@ -49,7 +49,7 @@ class RRT:
     self.loadmap()
     path_exist = False
     if RRT.DEBUG:
-      self.mapshow = cv2.imread(self.FILE_PREFIX+'mapshow.png')
+      self.mapshow = cv2.imread(self.FILE_PREFIX+'result.png')
       cv2.imshow(self.WIN_NAME, self.mapshow)
       f = open(self.FILE_PREFIX+'data.json')
       data = json.load(f)
@@ -69,7 +69,7 @@ class RRT:
     self.blockui()
 
   def dump_result(self, path_exist=1):
-    cv2.imwrite(self.FILE_PREFIX+'mapshow.png', self.mapshow)
+    cv2.imwrite(self.FILE_PREFIX+'result.png', self.mapshow)
     with open(self.FILE_PREFIX+'data.json', 'w') as f:
       json.dump({
           'path_exist': path_exist,
@@ -268,26 +268,27 @@ class RRT:
     return self.nodes[ind][0:2]
 
   def findpath(self, cur):
-    paths = []
+    self.path_inds = []
     self.path = []
     while cur and cur > 0:
-      paths.append(cur)
+      self.path_inds.append(cur)
       self.path.append(self.nodes[cur])
       nxt = self.edges.get(cur)
       cv2.line(self.mapshow, self.pos(cur), self.pos(nxt), (0, 200, 200), round(self.radius/2))
       if nxt > 0:
         cv2.circle(self.mapshow, self.pos(nxt), self.radius, (200, 200, 0), -1)
       else:
-        paths.append(nxt)
+        self.path_inds.append(nxt)
         self.path.append(self.nodes[nxt])
       cur = nxt
 
     cv2.imshow(self.WIN_NAME, self.mapshow)
-    paths.reverse()
-    print('----%d----\n' % self.found, paths)
+    self.path_inds.reverse()
+    print('----%d----\n' % self.found, self.path_inds)
     self.path.reverse()
     print('----%d----\n' % self.found, self.path)
     cv2.imwrite(self.FILE_PREFIX+'result.png', self.mapshow)
+    return self.path_inds
 
   def smooth_path(self, use_smooth=True):
     mapshowbk = cv2.imread(self.FILE_PREFIX+'mapshowbk.png')
@@ -337,8 +338,16 @@ class RRT:
     else:
       print('smoothing fail, fallback to connecting line...')
 
+      colr = (0, 200, 200)
       for i in range(len(self.path)-1):
-        cv2.line(mapshowbk, self.path[i][0:2], self.path[i+1][0:2], (0, 200, 200), self.radius*2)
+        if len(self.nodes[0]) > 2:
+          dis = self.point2exists(self.nodes[self.path_inds[i+1]], [self.nodes[self.path_inds[i]]])[0]**0.5+self.nodes[self.path_inds[i]][2]
+          if abs(self.nodes[self.path_inds[i+1]][2] - dis) > 1:
+            colr = (0, 0, 200)
+            print(self.nodes[self.path_inds[i+1]], dis)
+          else:
+            colr = (0, 200, 200)
+        cv2.line(mapshowbk, self.path[i][0:2], self.path[i+1][0:2], colr, self.radius*2)
 
       err, t = self.check_obsticals(mapshowbk, map_obsticle_msk)
       print('err', err)
